@@ -1,0 +1,14 @@
+{application, lager_scribe_backend,
+ [
+  {description, "An Erlang lager_scribe_backend library"},
+  {vsn, "1"},
+  {modules, [
+             lager_scribe_backend
+            ]},
+  {registered, []},
+  {applications, [
+                  kernel,
+                  stdlib
+                 ]},
+  {env, []}
+ ]}.
