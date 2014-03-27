@@ -14,10 +14,13 @@
 -type thrift_client() :: {tclient, Service :: atom(), Protocol :: any(), SeqId :: any()}.
 
 -record(state, {
-    level  :: {'mask', integer()},
-    client :: thrift_client(),
-    scribe_host :: string(),
-    scribe_port :: non_neg_integer()
+    level            :: {'mask', integer()}, %% Debug log level by default
+    formatter        :: atom(),
+    formatter_config :: any(),
+    category         :: atom(),
+    scribe_host      :: string(),
+    scribe_port      :: non_neg_integer(),
+    client           :: thrift_client()
 }).
 
 -include("scribe_types.hrl").
@@ -26,22 +29,25 @@
 %% gen_event callbacks
 
 init(Options) ->
-    LevelConfig = proplists:get_value(level, Options, debug),
-    ScribeHost  = proplists:get_value(scribe_host, Options, "localhost"),
-    ScribePort  = proplists:get_value(scribe_port, Options, 1463),
+    LevelConfig     = proplists:get_value(level, Options, debug),
+    Formatter       = proplists:get_value(formatter, Options, lager_default_formatter),
+    FormatterConfig = proplists:get_value(formatter_config, Options, []),
+    ScribeHost      = proplists:get_value(scribe_host, Options, "localhost"),
+    ScribePort      = proplists:get_value(scribe_port, Options, 1463),
     {ok, Client} = connect_to_scribe(ScribeHost, ScribePort),
     case validate_loglevel(LevelConfig) of
         false ->
             {error, {fatal, bad_loglevel}};
         Level ->
             {ok, #state{
-                level = Level,
-                client = Client,
+                level  = Level,
+                formatter = Formatter,
+                formatter_config = FormatterConfig,
                 scribe_host = ScribeHost,
-                scribe_port = ScribePort
+                scribe_port = ScribePort,
+                client = Client
             }}
     end.
-
 
 handle_event({log, Message}, State) ->
     log_message(Message, State);
@@ -80,8 +86,8 @@ log_message(Message, State=#state{level=Level}) ->
     end.
 
 send_to_scribe(Message, State=#state{client=Client}) ->
-    MessageText = lists:flatten(Message:message()),
-    Category    = log_category(Message:severity()),
+    MessageText = message_text(Message, State),
+    Category    = log_category(Message, State),
     LogEntry = #logEntry{
         category = unicode:characters_to_binary(Category),
         message  = unicode:characters_to_binary(MessageText)
@@ -105,7 +111,15 @@ validate_loglevel(Level) ->
             false
     end.
 
-log_category(Severity) ->
-    atom_to_list(Severity).
+message_text(Message, #state{formatter=Formatter, formatter_config=FormatConfig}) ->
+    Formatter:format(Message, FormatConfig).
+
+log_category(Message, #state{category=undefined}) ->
+    lager_scribe_category:default(Message);
+log_category(Message, #state{category=Category}) ->
+    case erlang:function_exported(Category, category, 1) of
+        true  -> Category:category(Message);
+        false -> lager_scribe_category:default(Message)
+    end.
 
 %% End of Module.
