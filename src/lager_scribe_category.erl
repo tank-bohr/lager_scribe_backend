@@ -5,5 +5,6 @@
 -callback category(Message) -> string()
     when Message :: lager_msg:lager_msg().
 
+-spec default(lager_msg:lager_msg()) -> string().
 default(Message) ->
     "lager." ++ atom_to_list(Message:severity()).

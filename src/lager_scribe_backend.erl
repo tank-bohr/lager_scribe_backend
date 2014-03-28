@@ -11,19 +11,14 @@
     code_change/3
 ]).
 
--type thrift_client() :: {tclient, Service :: atom(), Protocol :: any(), SeqId :: any()}.
-
 -record(state, {
     level            :: {'mask', integer()}, %% Debug log level by default
     formatter        :: atom(),
     formatter_config :: any(),
-    category         :: atom(),
-    scribe_host      :: string(),
-    scribe_port      :: non_neg_integer(),
-    client           :: thrift_client()
+    category         :: atom()
 }).
 
--include("scribe_types.hrl").
+-include("lager_scribe.hrl").
 
 %% API
 %% gen_event callbacks
@@ -34,7 +29,7 @@ init(Options) ->
     FormatterConfig = proplists:get_value(formatter_config, Options, []),
     ScribeHost      = proplists:get_value(scribe_host, Options, "localhost"),
     ScribePort      = proplists:get_value(scribe_port, Options, 1463),
-    {ok, Client} = connect_to_scribe(ScribeHost, ScribePort),
+    {ok, _} = lager_scribe_pool_sup:start_link(ScribeHost, ScribePort),
     case validate_loglevel(LevelConfig) of
         false ->
             {error, {fatal, bad_loglevel}};
@@ -42,10 +37,7 @@ init(Options) ->
             {ok, #state{
                 level  = Level,
                 formatter = Formatter,
-                formatter_config = FormatterConfig,
-                scribe_host = ScribeHost,
-                scribe_port = ScribePort,
-                client = Client
+                formatter_config = FormatterConfig
             }}
     end.
 
@@ -80,35 +72,13 @@ code_change(_OldVsn, State, _Extra) ->
 log_message(Message, State=#state{level=Level}) ->
     case lager_util:is_loggable(Message, Level, ?MODULE) of
         true ->
-            send_to_scribe(Message, State);
+            Category    = log_category(Message, State),
+            MessageText = message_text(Message, State),
+            Worker = poolboy:checkout(?POOL_NAME),
+            ok = gen_server:cast(Worker, {log, Category, MessageText}),
+            {ok, State};
         false ->
             {ok, State}
-    end.
-
-send_to_scribe(Message, State=#state{client=Client}) ->
-    MessageText = message_text(Message, State),
-    Category    = log_category(Message, State),
-    LogEntry = #logEntry{
-        category = unicode:characters_to_binary(Category),
-        message  = unicode:characters_to_binary(MessageText)
-    },
-    {Client1, _Result} = thrift_client:call(Client, 'Log', [[LogEntry]]),
-    {ok, State#state{client=Client1}}.
-
-connect_to_scribe(Host, Port) ->
-    thrift_client_util:new(Host, Port, scribe_thrift, [
-        {framed, true},
-        {strict_read, false},
-        {strict_write, false}
-    ]).
-
-validate_loglevel(Level) ->
-    try lager_util:config_to_mask(Level) of
-        Levels ->
-            Levels
-    catch
-        _:_ ->
-            false
     end.
 
 message_text(Message, #state{formatter=Formatter, formatter_config=FormatConfig}) ->
@@ -120,6 +90,15 @@ log_category(Message, #state{category=Category}) ->
     case erlang:function_exported(Category, category, 1) of
         true  -> Category:category(Message);
         false -> lager_scribe_category:default(Message)
+    end.
+
+validate_loglevel(Level) ->
+    try lager_util:config_to_mask(Level) of
+        Levels ->
+            Levels
+    catch
+        _:_ ->
+            false
     end.
 
 %% End of Module.
