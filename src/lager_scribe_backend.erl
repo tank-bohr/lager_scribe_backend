@@ -27,6 +27,7 @@ init(Options) ->
     LevelConfig     = proplists:get_value(level, Options, debug),
     Formatter       = proplists:get_value(formatter, Options, lager_default_formatter),
     FormatterConfig = proplists:get_value(formatter_config, Options, []),
+    Category        = proplists:get_value(category, Options),
     ScribeHost      = proplists:get_value(scribe_host, Options, "localhost"),
     ScribePort      = proplists:get_value(scribe_port, Options, 1463),
     SizeArgs        = proplists:get_value(pool_size, Options, [
@@ -39,9 +40,10 @@ init(Options) ->
             {error, {fatal, bad_loglevel}};
         Level ->
             {ok, #state{
-                level  = Level,
+                level = Level,
                 formatter = Formatter,
-                formatter_config = FormatterConfig
+                formatter_config = FormatterConfig,
+                category = Category
             }}
     end.
 
