@@ -29,7 +29,11 @@ init(Options) ->
     FormatterConfig = proplists:get_value(formatter_config, Options, []),
     ScribeHost      = proplists:get_value(scribe_host, Options, "localhost"),
     ScribePort      = proplists:get_value(scribe_port, Options, 1463),
-    {ok, _} = lager_scribe_pool_sup:start_link(ScribeHost, ScribePort),
+    SizeArgs        = proplists:get_value(pool_size, Options, [
+        {size, 5},
+        {max_overflow, 10}
+    ]),
+    {ok, _} = lager_scribe_pool_sup:start_link(ScribeHost, ScribePort, SizeArgs),
     case validate_loglevel(LevelConfig) of
         false ->
             {error, {fatal, bad_loglevel}};
