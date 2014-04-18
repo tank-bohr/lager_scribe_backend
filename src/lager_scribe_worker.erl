@@ -21,13 +21,14 @@
 -include("scribe_types.hrl").
 -include("lager_scribe.hrl").
 
-% -spec start_link([string(), non_neg_integer()]) ->
-%     {ok, pid()} | ignore | {error, any()}.
+-spec start_link(proplists:proplist()) ->
+    {ok, pid()} | ignore | {error, any()}.
 start_link(WorkerArgs) ->
     gen_server:start_link(?MODULE, WorkerArgs, []).
 
 %% @private
-init([Host, Port]) ->
+init(ScribeOptions) ->
+    [Host, Port] = [proplists:get_value(Opt, ScribeOptions) || Opt <- [host, port]],
     {ok, Client} = thrift_client_util:new(Host, Port, scribe_thrift, [
         {framed, true},
         {strict_read, false},

@@ -9,13 +9,18 @@
 
 -define(SERVER, ?MODULE).
 
+-spec start_link(string(), non_neg_integer(), proplists:proplist()) ->
+    {ok, pid()} | ignore | {error, any()}.
 start_link(ScribeHost, ScribePort, SizeArgs) ->
     supervisor:start_link({local, ?SERVER}, ?MODULE, [ScribeHost, ScribePort, SizeArgs]).
 
 %% @private
 init([ScribeHost, ScribePort, SizeArgs]) ->
     Name = ?POOL_NAME,
-    WorkerArgs = [ScribeHost, ScribePort],
+    WorkerArgs = [
+        {host, ScribeHost},
+        {port, ScribePort}
+    ],
     PoolArgs = [
         {name, {local, Name}},
         {worker_module, lager_scribe_worker}

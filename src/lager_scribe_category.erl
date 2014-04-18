@@ -7,4 +7,4 @@
 
 -spec default(lager_msg:lager_msg()) -> string().
 default(Message) ->
-    "lager." ++ atom_to_list(Message:severity()).
+    "lager." ++ atom_to_list(lager_msg:severity(Message)).
